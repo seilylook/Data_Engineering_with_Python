@@ -1091,3 +1091,213 @@ green  open   users                            hFnaau-_TtaDclMcC5Ocpw   1   0   
 <img src="./images/Figure 6.3.png" />
 
 <img src="./images/Figure 6.4.png" />
+
+## Chapter 12. Building a Kafka Cluster
+
+In stream processing, the data may be inifinite and incomplete at the time of a query. One of the leading tools in handling streaming data is **Apache Kafka**. Kafka is a tool that allows you to send dat in real time to topics. These topics can be read by consumers who process the data. 
+
+### Creating zookeeper and Kafka clusters
+
+```bash
+services:
+  # Zookeeper service
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+      - ./logs/zookeeper:/var/log/zookeeper
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - data-platform
+  # Kafka Broker 1
+  kafka1:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka1
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+      - ./logs/kafka1:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka Broker 2
+  kafka2:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka2
+    ports:
+      - "9093:9093"
+      - "29093:29093"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093,PLAINTEXT_HOST://localhost:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+      - ./logs/kafka2:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9093", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka Broker 3
+  kafka3:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka3
+    ports:
+      - "9094:9094"
+      - "29094:29094"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094,PLAINTEXT_HOST://localhost:29094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+      - ./logs/kafka3:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9094", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka-UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    ports:
+      - "8989:8080"
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    environment:
+      KAFKA_CLUSTERS_0_NAME: data-platform-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092,kafka2:9093,kafka3:9094
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+    restart: always
+    networks:
+      - data-platform
+```
+
+#### Testing the kafka cluster
+
+1. Topics 테스트
+
+```bash
+docker exec -i -t kafka1 bash
+
+kafka-topics --bootstrap-server kafka1:9092,kafka2:9093,kafka3:9094 --create --topic {TOPIC_NAME} --partitions 3 --replication-factor 3
+
+Created topic dataengineering.
+```
+
+<img src="./images/Figure 12.1.png" />
+
+2. Topics 확인
+
+```bash
+kafka-topics --bootstrap-server kafka1:9092 --list
+
+dataengineering
+
+kafka-topics --bootstrap-server kafka1:9092 --describe --topic dataengineering
+
+Topic: dataengineering  TopicId: FhQDsGqqQVaJARfp--T_tw PartitionCount: 3       ReplicationFactor: 3    Configs: min.insync.replicas=2
+        Topic: dataengineering  Partition: 0    Leader: 3       Replicas: 3,2,1 Isr: 3,2,1
+        Topic: dataengineering  Partition: 1    Leader: 1       Replicas: 1,3,2 Isr: 1,3,2
+        Topic: dataengineering  Partition: 2    Leader: 2       Replicas: 2,1,3 Isr: 2,1,3
+```
+
+3. Messages 테스트
+
+```bash
+kafka-console-producer --bootstrap-server kafka1:9092 kafka2:9093 kafka3:9094 --topic dataengineering
+
+> 안녕하세요 메시지 1입니다.
+> 안녕하세요 메시지 2입니다.
+> {"name": "테스트", "value": 123}
+```
+
+4. Read Message
+
+새로운 터미널 열기
+
+```bash
+kafka-console-consumer --bootstrap-server kafka1:9092,kafka2:9093,kafka3:9094 --topic dataengineering --from-beginning
+
+안녕하세요 메시�지 1입니다.
+안녕하세요 메시지 2입니다.
+{"�name": "테스트", "value": 123}
+
+Processed a total of 4 messages
+```

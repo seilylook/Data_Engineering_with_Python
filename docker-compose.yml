@@ -36,38 +36,185 @@ x-airflow-common:
     - data-platform
 
 services:
-  nifi:
-    image: apache/nifi:1.28.0
-    container_name: nifi
-    restart: always
+  # Zookeeper service
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
     ports:
-      - "9300:9300"
+      - "2181:2181"
     environment:
-      - NIFI_WEB_HTTP_HOST=0.0.0.0
-      - NIFI_WEB_HTTP_PORT=9300
-      - NIFI_WEB_PROXY_HOST=localhost:9300
-      - SINGLE_USER_CREDENTIALS_USERNAME=nifi
-      - SINGLE_USER_CREDENTIALS_PASSWORD=nifipassword
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - nifi-system-data:/opt/nifi/nifi-current/system-data  # 내부 시스템 데이터
-      - ./logs/nifi:/opt/nifi/nifi-current/logs
-      - nifi-conf:/opt/nifi/nifi-current/conf
-      - ./nifi/data/raw:/opt/nifi/nifi-current/data/raw      # 원본 데이터
-      - ./nifi/data/processed:/opt/nifi/nifi-current/data/processed  # 처리된 데이터
-      - ./nifi/templates:/opt/nifi/nifi-current/templates
-      - ./nifi/drivers:/opt/nifi/nifi-current/lib/custom-drivers  # JDBC 드라이버 마운트
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+      - ./logs/zookeeper:/var/log/zookeeper
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9300/nifi-api/system-diagnostics"]
-      interval: 60s
-      timeout: 30s
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
       retries: 5
-      start_period: 120s 
+      start_period: 30s
     networks:
       - data-platform
-    deploy:
-      resources:
-        limits:
-          memory: 8G
+  # Kafka Broker 1
+  kafka1:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka1
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka1-data:/var/lib/kafka/data
+      - ./logs/kafka1:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka Broker 2
+  kafka2:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka2
+    ports:
+      - "9093:9093"
+      - "29093:29093"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9093,PLAINTEXT_HOST://localhost:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+      - ./logs/kafka2:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9093", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka Broker 3
+  kafka3:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka3
+    ports:
+      - "9094:9094"
+      - "29094:29094"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9094,PLAINTEXT_HOST://localhost:29094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: INFO
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+      - ./logs/kafka3:/var/log/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9094", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    networks:
+      - data-platform
+
+  # Kafka-UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    ports:
+      - "8989:8080"
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    environment:
+      KAFKA_CLUSTERS_0_NAME: data-platform-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092,kafka2:9093,kafka3:9094
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+    restart: always
+    networks:
+      - data-platform
+  # nifi:
+  #   image: apache/nifi:1.28.0
+  #   container_name: nifi
+  #   restart: always
+  #   ports:
+  #     - "9300:9300"
+  #   environment:
+  #     - NIFI_WEB_HTTP_HOST=0.0.0.0
+  #     - NIFI_WEB_HTTP_PORT=9300
+  #     - NIFI_WEB_PROXY_HOST=localhost:9300
+  #     - SINGLE_USER_CREDENTIALS_USERNAME=nifi
+  #     - SINGLE_USER_CREDENTIALS_PASSWORD=nifipassword
+  #   volumes:
+  #     - nifi-system-data:/opt/nifi/nifi-current/system-data  # 내부 시스템 데이터
+  #     - ./logs/nifi:/opt/nifi/nifi-current/logs
+  #     - nifi-conf:/opt/nifi/nifi-current/conf
+  #     - ./nifi/data/raw:/opt/nifi/nifi-current/data/raw      # 원본 데이터
+  #     - ./nifi/data/processed:/opt/nifi/nifi-current/data/processed  # 처리된 데이터
+  #     - ./nifi/templates:/opt/nifi/nifi-current/templates
+  #     - ./nifi/drivers:/opt/nifi/nifi-current/lib/custom-drivers  # JDBC 드라이버 마운트
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9300/nifi-api/system-diagnostics"]
+  #     interval: 60s
+  #     timeout: 30s
+  #     retries: 5
+  #     start_period: 120s 
+  #   networks:
+  #     - data-platform
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 8G
 
   elasticsearch:
     image: elasticsearch:7.17.28
@@ -375,3 +522,8 @@ volumes:
   kibana-data:
   nifi-system-data:  
   nifi-conf:
+  zookeeper-data:
+  zookeeper-log:
+  kafka1-data:
+  kafka2-data:
+  kafka3-data:

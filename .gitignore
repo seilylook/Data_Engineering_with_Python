@@ -1,0 +1,5 @@
+/logs
+*.env
+/app/data/
+/app/target/
+/nifi/data/

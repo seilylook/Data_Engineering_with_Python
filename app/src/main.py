@@ -11,6 +11,7 @@ import logging
 import sys
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
+from src.services.data_streaming import KafkaProducer, KafkaConsumer
 
 
 def setup_logging() -> None:
@@ -163,12 +164,12 @@ def main() -> None:
     setup_logging()
     # logging.info("데이터 생성 및 저장 프로세스 시작")
 
-    # # 1. Sample data 존재 체크
-    # try:
-    #     csv_path = ensure_data_exists()
-    # except Exception as e:
-    #     logging.error(f"데이터셋이 존재하지 않습니다: {e}")
-    #     return
+    # 1. Sample data 존재 체크
+    try:
+        csv_path = ensure_data_exists()
+    except Exception as e:
+        logging.error(f"데이터셋이 존재하지 않습니다: {e}")
+        return
 
     # # 2. 데이터베이스 연결 확인
     # connection_status = check_db_connections()
@@ -213,17 +214,46 @@ def main() -> None:
 
     # logging.info("데이터 생성 및 저장 프로세스 완료")
 
+    # logging.info("========================")
+    # logging.info("SeeClickFix 데이터 수집 시작")
+    # logging.info("========================")
+
+    # # 저장소 생성
+    # repository = SeeClickFixRepository(index="scf")
+
+    # # 데이터 수집 및 저장 실행
+    # processed_count = collect_all_issues(repository)
+
+    # logging.info(f"처리 완료: {processed_count}개 이슈")
+
     logging.info("========================")
-    logging.info("SeeClickFix 데이터 수집 시작")
+    logging.info("Kafka Topic & Message 생성")
     logging.info("========================")
 
-    # 저장소 생성
-    repository = SeeClickFixRepository(index="scf")
+    # producer = KafkaProducer()
+    # try:
+    #     producer.process_csv(csv_path, topic_name="users", key_field="id")
+    # except Exception as e:
+    #     logging.error(e)
+    # finally:
+    #     producer.close()
 
-    # 데이터 수집 및 저장 실행
-    processed_count = collect_all_issues(repository)
+    consumer = KafkaConsumer(group_id="sample-consumer")
+    try:
+        consumer.connect(topics=["users"])
 
-    logging.info(f"처리 완료: {processed_count}개 이슈")
+        def print_message(message):
+            logging.info(f"Received: {message}")
+
+        consumer.consume_messages(process_func=print_message, max_messages=100)
+
+        df = consumer.consume_to_dataframe(max_messages=100)
+        logging.info(f"DataFrame shape: {df.shape}")
+        logging.info(df.head())
+    except Exception as e:
+        logging.error(f"Consumer 작업 중 문제 발생: {e}")
+    finally:
+        consumer.close()
 
 
 if __name__ == "__main__":

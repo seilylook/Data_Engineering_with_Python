@@ -1301,3 +1301,162 @@ kafka-console-consumer --bootstrap-server kafka1:9092,kafka2:9093,kafka3:9094 --
 
 Processed a total of 4 messages
 ```
+
+<img src="./images/Figure 12.2.png" />
+
+### Producing and consuming with python
+
+#### Writing a kafka producer in Python
+
+```bash
+app-py3.12 {seilylook} 💡   ~/Development/Book/Data_Engineering_with_Python/app   main ±  make start
+=========================
+Starting the application...
+=========================
+python -m src.main
+2025-03-20 21:36:56,208 - root - INFO - 데이터셋이 이미 존재합니다: data/raw/test_data.csv
+2025-03-20 21:36:56,208 - root - INFO - ========================
+2025-03-20 21:36:56,208 - root - INFO - Kafka Topic & Message 생성
+2025-03-20 21:36:56,208 - root - INFO - ========================
+2025-03-20 21:36:56,227 - src.services.data_streaming - INFO - Kafka 클러스터 연결 및 토픽 확인 중...
+2025-03-20 21:36:56,255 - src.services.data_streaming - WARNING - 'users' 토픽이 존재하지 않습니다. 자동 생성될 수 있습니다.
+2025-03-20 21:36:56,255 - src.services.data_streaming - INFO - 'data/raw/test_data.csv' 파일 처리 시작
+2025-03-20 21:36:56,261 - src.services.data_streaming - INFO - 100개 메시지 처리 중...
+2025-03-20 21:36:56,264 - src.services.data_streaming - INFO - 200개 메시지 처리 중...
+2025-03-20 21:36:56,267 - src.services.data_streaming - INFO - 300개 메시지 처리 중...
+2025-03-20 21:36:56,270 - src.services.data_streaming - INFO - 400개 메시지 처리 중...
+2025-03-20 21:36:56,272 - src.services.data_streaming - INFO - 500개 메시지 처리 중...
+2025-03-20 21:36:56,275 - src.services.data_streaming - INFO - 600개 메시지 처리 중...
+2025-03-20 21:36:56,277 - src.services.data_streaming - INFO - 700개 메시지 처리 중...
+2025-03-20 21:36:56,280 - src.services.data_streaming - INFO - 800개 메시지 처리 중...
+2025-03-20 21:36:56,282 - src.services.data_streaming - INFO - 900개 메시지 처리 중...
+2025-03-20 21:36:56,285 - src.services.data_streaming - INFO - 1000개 메시지 처리 중...
+2025-03-20 21:36:58,524 - src.services.data_streaming - INFO - 총 1000개 메시지가 'users' 토픽으로 전송되었습니다.
+```
+
+##### 문세 상황
+
+1. DNS 해석 실패
+
+```bash
+%3|1742473184.651|FAIL|csv-producer#producer-1| [thrd:kafka2:9093/bootstrap]: kafka2:9093/bootstrap: Failed to resolve 'kafka2:9093': nodename nor servname provided, or not known (after 3ms in state CONNECT, 1 identical error(s) suppressed)
+```
+
+2. 연결 시간 초과
+
+```bash
+%4|1742473953.566|FAIL|csv-producer#producer-1| [thrd:172.18.0.7:9093/bootstrap]: 172.18.0.7:9093/bootstrap: Connection setup timed out in state CONNECT (after 30030ms in state CONNECT)
+%4|1742473954.564|FAIL|csv-producer#producer-1| [thrd:172.18.0.6:9092/bootstrap]: 172.18.0.6:9092/bootstrap: Connection setup timed out in state CONNECT (after 30028ms in state CONNECT)
+%4|1742473955.569|FAIL|csv-producer#producer-1| [thrd:172.18.0.8:9094/bootstrap]: 172.18.0.8:9094/bootstrap: Connection setup timed out in state CONNECT (after 30029ms in state CONNECT)
+```
+
+##### 문제 원인
+
+1. kafka 이중 리스너 설정
+
+kafka는 Docker 컨테이너 환경에서 두 가지 리스너를 사용한다.
+
+- 내부 통신용 리스너: `PLAINTEXT://kafka1:9092`
+
+    - 컨티에너 간 내부 통신에 사용됨
+
+    - Docker 내부 DNS로 해석되어야 함
+
+- 외부 접근용 리스너: `PLAINTEXT_HOST://localhost:29092`
+
+    - 호스트 머신에서 접근할 때 사용됨
+
+    - 외부로 포트가 노출됨
+
+2. 구체적인 오류 원인
+
+- DNS 해석 실패
+
+    - 클라이언트가 `kafka1:9092, kafka2:9093, kafka3:9094`와 같은 호스트명을 IP주소로 해석하지 못함
+
+    - 이는 Docker 네트워크 외부에서 접근하거나, DNS 설정이 제대로 되지 않은 경우 발생.
+
+- 연결 시간 초과
+
+    - IP 주소는 해석되었으나 실제 TCP 연결이 이루어지지 않음
+
+    - 이는 보통 방화벽 문제, 네트워크 분리, 또는 Kafka 설정 문제로 발생
+
+##### 해결 과정
+
+1. 접근 방식 변경: 내부 포트에서 외부 포트로
+
+kafka 브로커의 외부 노출 포트(29092, 29093, 29094)를 사용하도록 변경
+
+```python
+# 변경 전
+bootstrap_servers = "kafka1:9092,kafka2:9093,kafka3:9094"
+
+# 변경 후
+bootstrap_servers = "localhost:29092,localhost:29093,localhost:29094"
+```
+
+2. 해결 원리
+
+- 내부 포트(9092, 9093, 9094):
+
+    - Docker 네트워크 내에서만 접근 가능
+
+    - 컨테이너 간 직접 통신에 사용
+
+- 외부 포트(29092, 29093, 29094):
+    
+    - 호스트 머신을 통해 접근
+
+    - Docker 컨테이너 외부에서도 접근 가능
+
+    - localhost로 라우팅됨
+
+3. Docker compose에서의 kafka 설정 확인
+
+```yaml
+KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,PLAINTEXT_HOST://localhost:29092
+KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+```
+
+- `ADVERTISED_LISTENERS`: Kafka가 클라이언트에게 알려주는 연결 정보
+- `LISTENER_SECURITY_PROTOCOL_MAP`: 각 리스너의 보안 프로토콜 지정
+- `INTER_BROKER_LISTENER_NAME`: 브로커 간 통신에 사용할 리스너 지정
+
+##### 결론
+
+- 같은 Docker 네트워크 내: 서비스 이름과 내부 포트 (kafka1:9092)
+
+- 외부 또는 다른 네트워크: localhost와 외부 포트 (localhost:29092)
+
+
+#### Writing a kafka consumer in Python
+
+```bash
+app-py3.12 ✘ {seilylook} 💡   ~/Development/Book/Data_Engineering_with_Python/app   main ±  make start
+=========================
+Starting the application...
+=========================
+python -m src.main
+2025-03-20 23:02:45,286 - root - INFO - 데이터셋이 이미 존재합니다: data/raw/test_data.csv
+2025-03-20 23:02:45,286 - root - INFO - ========================
+2025-03-20 23:02:45,286 - root - INFO - Kafka Topic & Message 생성
+2025-03-20 23:02:45,286 - root - INFO - ========================
+2025-03-20 23:02:45,303 - src.services.data_streaming - INFO - 토픽 구독 시작: users
+2025-03-20 23:02:45,303 - src.services.data_streaming - INFO - 메시지 소비 시작...
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Kristina Parker', 'age': 68, 'street': '34674 Miller Overpass', 'city': 'Randallfurt', 'state': 'Maryland', 'zip': 40293, 'lng': 161.665903, 'lat': -87.125185}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Johnathan Lawson', 'age': 19, 'street': '95990 Williams Shore Apt. 829', 'city': 'Webbside', 'state': 'Maine', 'zip': 15543, 'lng': 146.494403, 'lat': -73.700935}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Rose Carpenter', 'age': 68, 'street': '444 Joseph Station', 'city': 'Pattersonside', 'state': 'New Mexico', 'zip': 79242, 'lng': 0.048327, 'lat': 74.385104}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Kimberly Santiago', 'age': 39, 'street': '7635 Peterson Spur Apt. 396', 'city': 'Tinaborough', 'state': 'Nevada', 'zip': 66267, 'lng': -38.278099, 'lat': -36.354147}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Wendy Murphy', 'age': 75, 'street': '35166 Ashlee Mills', 'city': 'Lawsonview', 'state': 'Massachusetts', 'zip': 30520, 'lng': -137.345477, 'lat': 35.262674}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Michael Lin', 'age': 18, 'street': '13086 Hall Pass', 'city': 'East Jay', 'state': 'New York', 'zip': 49686, 'lng': -52.411619, 'lat': -5.883704}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Wesley Watts', 'age': 61, 'street': '4541 Roth Brook Apt. 538', 'city': 'Hensleyland', 'state': 'Maine', 'zip': 70629, 'lng': 137.051209, 'lat': -35.1061065}
+2025-03-20 23:02:49,507 - root - INFO - Received: {'name': 'Dennis Wolfe', 'age': 37, 'street': '474 Jones Plaza', 'city': 'Wardville', 'state': 'Minnesota', 'zip': 70795, 'lng': 19.632934, 'lat': -81.602252}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Sharon Chandler', 'age': 21, 'street': '696 Michael Valleys Apt. 412', 'city': 'Lauraton', 'state': 'New Jersey', 'zip': 19419, 'lng': 14.510882, 'lat': 65.1203075}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Amanda Mcmahon', 'age': 34, 'street': '96470 Cobb Hollow', 'city': 'Albertberg', 'state': 'Louisiana', 'zip': 22483, 'lng': -8.723311, 'lat': 27.196991}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Peter Nguyen', 'age': 68, 'street': '15478 Dylan Crescent', 'city': 'North Katrinashire', 'state': 'New Jersey', 'zip': 96223, 'lng': 26.947073, 'lat': -9.097944}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Matthew Robbins', 'age': 43, 'street': '4211 Brittany Field Suite 605', 'city': 'South Rebeccaborough', 'state': 'Delaware', 'zip': 19879, 'lng': 100.065663, 'lat': 54.933101}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Michael Wilcox', 'age': 33, 'street': '018 Leon Alley', 'city': 'Johnmouth', 'state': 'New Mexico', 'zip': 73338, 'lng': -19.245506, 'lat': 26.5704125}
+2025-03-20 23:02:49,508 - root - INFO - Received: {'name': 'Amanda Williams', 'age': 75, 'street': '44981 Rebecca Bypass', 'city': 'North Joseph', 'state': 'South Carolina', 'zip': 66529, 'lng': -24.771468, 'lat': 14.545032}
+```
